@@ -32,7 +32,16 @@ function commitCrime() {
     })
         .then(res => res.json())
         .then(res => {
-            handleCrimeResponse(res);
+            if(!res.error) {
+                handleCrimeResponse(res);
+            }
+            else {
+                printLog(res.error);
+                if(!timer) {
+                    printLog('Starting crime timer...');
+                    timer = startCrimeTimer(crimeInterval);
+                }
+            }
         })
         .catch(err => {
             console.log(err);
@@ -73,6 +82,9 @@ function calculateCrimeInterval(energy) {
     if(energy && energy.rechargeAmount && !crimeIntervalCalculated) {
         crimeInterval = Math.floor((20 / (energy.rechargeAmount / 30)) * 1000);
         crimeIntervalCalculated = true;
+        if(timer) {
+            clearInterval(timer);
+        }
         timer = startCrimeTimer(crimeInterval);
         printLog(`Crime Interval Updated: ${crimeInterval}ms`);
     }
@@ -101,10 +113,6 @@ function handleJam(option) {
                     console.error(res.result.float_message);
                     let { arrest_length } = res.result;
                     printLog(`Jail Timer: ${arrest_length} seconds`);
-                    clearInterval(timer);
-                    setTimeout(() => {
-                        timer = startCrimeTimer(crimeInterval);
-                    }, arrest_length * 1000);
                 }
             }
         })
