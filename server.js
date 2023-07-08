@@ -33,6 +33,9 @@ function commitCrime() {
         .then(res => res.json())
         .then(res => {
             handleCrimeResponse(res);
+        })
+        .catch(err => {
+            console.log(err);
         });
 }
 
@@ -84,26 +87,30 @@ function printResult(result) {
 
 function handleJam(option) {
     printLog(`Handling Jam with ${option}...`);
+
     fetch("https://www.bootleggers.us/ajax/crimes.php?action=handle-jam", {
         "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
         "body": `choice=${option}`,
         "method": "POST"
     })
-    .then(res => res.json())
-    .then(res => {
-        if(res.result) {
-            printResult(res.result);
-            if(res.result.outcome === 'busted') {
-                console.error(res.result.float_message);
-                let { arrest_length } = res.result;
-                printLog(`Jail Timer: ${arrest_length} seconds`);
-                clearInterval(timer);
-                setTimeout(() => {
-                    timer = startCrimeTimer(crimeInterval);
-                }, arrest_length * 1000);
+        .then(res => res.json())
+        .then(res => {
+            if(res.result) {
+                printResult(res.result);
+                if(res.result.outcome === 'busted') {
+                    console.error(res.result.float_message);
+                    let { arrest_length } = res.result;
+                    printLog(`Jail Timer: ${arrest_length} seconds`);
+                    clearInterval(timer);
+                    setTimeout(() => {
+                        timer = startCrimeTimer(crimeInterval);
+                    }, arrest_length * 1000);
+                }
             }
-        }
-    });
+        })
+        .catch(err => {
+            console.log(err);
+        });
 }
 
 function handleCaptchaV2() {
@@ -124,6 +131,9 @@ function handleCaptchaV2() {
             setTimeout(() => {
                 resumeCrimeIntervalWithRecaptchaToken(res.request);
             }, 15000);
+        })
+        .catch(err => {
+            console.log(err);
         });
 }
 
@@ -139,6 +149,9 @@ function resumeCrimeIntervalWithRecaptchaToken(id) {
             .then(res => res.json())
             .then(res => {
                 handleRecaptchaToken(res);
+            })
+            .catch(err => {
+                console.log(err);
             });
         },
         5000
