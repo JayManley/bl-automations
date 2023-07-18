@@ -5,11 +5,14 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node --experimental-modules server.mjs"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "dotenv": "^16.3.1"
-  }
+    "dotenv": "^16.3.1",
+    "fetch": "^1.1.0",
+    "node-fetch": "^3.3.1"
+  },
+  "type": "module"
 }

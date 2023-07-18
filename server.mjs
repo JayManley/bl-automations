@@ -1,5 +1,7 @@
-require('dotenv').config({path: __dirname + '/.env'});
-const headers = require('./headers');
+import dotenv from 'dotenv'
+dotenv.config({path: './.env'});
+import headers from './headers.mjs';
+import fetch from 'node-fetch';
 
 // Constants
 const BL_RECAPTCHAV2_SITE_KEY = '6LeplqUlAAAAADD_vdYJRfzMtaBpZ9ZErfETYCI0';
@@ -298,7 +300,7 @@ function handleCaptchaV2() {
 }
 
 function resumeCrimeIntervalWithRecaptchaToken(id) {
-    params = {
+    const params = {
         id,
         key: X2CAPTCHA_API_KEY,
         action: 'get',
