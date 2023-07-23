@@ -14,90 +14,140 @@ const CRIME_ID = 8; // Change this to commit different crime indexes
 const GTA_LOW_INCOME_NEIGHBOURHOOD_ID = 1;
 const GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID = 2;
 
+const carIdsForMelting = [
+    7,
+    8,
+    9,
+    13,
+    14,
+    15,
+    17,
+    18,
+    24,
+    25,
+    26,
+];
+
+let carsForMelting = [];
+
 // Variables with default values assigned
 let crimeInterval = 42000;
 let timeStamp = new Date().getTime();
 
 // Variables
-let timer;
 let gtaTimers = [];
 let token;
 let captchaResolveTimer;
 let inventory;
 let bullets = 0;
 
+
+const gtaIntervals = [
+    5 * 60, // 5 Mins for Lower Class Neighbourhood
+    20 * 60 // 20 Mins for Middle Class Neighbourhood
+];
+
+let timers = [];
+
+class Timer {
+    constructor(type, id) {
+        this.type = type;
+        this.id = id;
+        this.enable();
+        this.timeStamp = now() + timers.length;
+        if('crime' === type) {
+            this.interval = 45;
+            this.callback = commitCrime;
+        }
+        else if('gta' === type) {
+            this.interval = gtaIntervals[this.id - 1];
+            this.callback = commitGTA;
+        }
+    }
+    updateTimeStamp() {
+        this.timeStamp = now() + this.interval;
+    }
+    enable() {
+        if(!this.enabled) {
+            this.enabled = true;
+            printLog(`Timer enabled: ${this.type} - ${this.id}`);
+        }
+    }
+    disable() {
+        if(this.enabled) {
+            this.enabled = false;
+            printLog(`Timer disabled: ${this.type} - ${this.id}`);
+        }
+    }
+}
+
 init(); // Start the process
 
 function init() {
+
     if(COMMIT_CRIMES) {
-        commitCrime();
+        timers.push(new Timer('crime', 8));
     }
-    // if(COMMIT_GTA) {
-    //     commitGTA(GTA_LOW_INCOME_NEIGHBOURHOOD_ID);
-    //     commitGTA(GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID);
-    // }
-}
 
-function commitGTA(id) {
-    fetch("https://www.bootleggers.us/ajax/auto-theft.php?action=commit", {
-        "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
-        "body": `crime_id=${id}`,
-        "method": "POST"
-    })
-        .then(res => res.json())
-        .then(res=> {
-            token = ''; // We no longer need the token at this point
-            if(!res.error) {
-                handleGTAResponse(res);
+    if(COMMIT_GTA) {
+        // Space out the intervals to prevent 'Unable to commit crime' error message
+        timers.push(new Timer('gta', GTA_LOW_INCOME_NEIGHBOURHOOD_ID));
+        timers.push(new Timer('gta', GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID));
+        setInterval(() => {
+            if(carsForMelting.length) {
+                meltCar(carsForMelting.pop());
             }
-            else {
-                printLog(res.error);
-                if(!gtaTimers[id - 1]) {
-                    printLog(`Starting GTA #${id} timer...`);
-                    let i;
-                    if(id === GTA_LOW_INCOME_NEIGHBOURHOOD_ID) {
-                        i = 5 * 60 * 1000; // 5 Mins for Lower Class Neighbourhood
-                    }
-                    else if(id === GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID) {
-                        i = 20 * 60 * 1000; // 20 Mins for Lower Class Neighbourhood
-                    }
-                    i += 1000; // Add a second onto the interval to cater for any latency
-                    gtaTimers[id] = startGTATimer(id, i);
+        }, 5000);
+    }
+
+    if(timers.length) {
+        setInterval(() => {
+            timers.forEach(async t => {
+                if(t.enabled && now() >= t.timeStamp) {
+                    await t.callback(t.id);
                 }
-            }
-        })
-        .catch(err => {
-            console.log(err);
-        });
+            });
+        }, 2000);
+    }
 }
 
-function commitCrime() {
+function now() {
+    return Math.floor(new Date().getTime() / 1000);
+}
+
+function commitCrime(id) {
     token = token ? `&token=${token}` : '';
     fetch("https://www.bootleggers.us/ajax/crimes.php?action=commit", {
         "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
-        "body": `crime_id=${CRIME_ID}${token}`,
+        "body": `crime_id=${id}${token}`,
         "method": "POST"
     })
         .then(res => res.json())
         .then(res => {
             token = ''; // We no longer need the token at this point
+            let timer = timers.find(t => t.type === 'crime');
             if(!res.error) {
                 handleCrimeResponse(res);
             }
             else if(res.error === 'You need to deal with the cops first!') {
                 if(bullets >= 10) {
-                    handleJam('shoot');
+                    handleJam('shoot', timer);
                 }
                 else {
-                    handleJam('surrender');
+                    handleJam('surrender', timer);
                 }
             }
             else {
-                printLog(res.error);
-            }
-            if(!timer) {
-                printLog('Starting crime timer...');
-                timer = startCrimeTimer(crimeInterval);
+                if('You are in jail!' === res.error) {
+                    timers.forEach(t => t.timeStamp = t.timeStamp <= now() ? now() + 10 : t.timeStamp); // Wait 10 seconds if in jail before trying again
+                }
+                else if('Unable to commit crime!' === res.error) {
+                    timer.timeStamp = now() + 10;
+                }
+                else {
+                    printLog('Crime Error: ' + res.error);
+                }
+                timer.enable();
             }
         })
         .catch(err => {
@@ -105,24 +155,52 @@ function commitCrime() {
         });
 }
 
-function startCrimeTimer(ms) {
-    clearInterval(timer);
-    return setInterval(() => {
-        commitCrime();
-    }, ms);
+function handleResponseError(timer) {
+
 }
 
-function startGTATimer(id, ms) {
-    clearInterval(gtaTimers[id]);
-    return setInterval(() => {
-        commitGTA(id);
-    }, ms);
+function commitGTA(gtaId) {
+    return new Promise((resolve, reject) => {
+        fetch("https://www.bootleggers.us/ajax/auto-theft.php?action=commit", {
+            "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
+            "body": `crime_id=${gtaId}`,
+            "method": "POST"
+        })
+            .then(res => res.json())
+            .then(res=> {
+                token = ''; // We no longer need the token at this point
+                if(!res.error) {
+                    handleGTAResponse(res, gtaId);
+                }
+                else {
+                    let timer = timers.find(t => t.type === 'gta' && t.id === gtaId);
+                    if('You are in jail!' === res.error) {
+                        timers.forEach(t => t.timeStamp = t.timeStamp <= now() ? now() + 10 : t.timeStamp); // Wait 10 seconds if in jail before trying again
+                        printLog('GTA #' + gtaId + ': You are in jail, pausing all timers and resuming again in 10 seconds...');
+                    }
+                    else if(['Unable to commit crime!', 'This crime is cooling down!'].includes(res.error)) {
+                        timer.timeStamp = now() + 10;
+                        printLog('GTA #' + gtaId + ': Cooling down, trying again in 10 seconds...');
+                    }
+                    else {
+                        printLog(`GTA ${timer.id} Error: ${res.error}`);
+                    }
+                    timer.enable();
+                }
+                resolve(res);
+            })
+            .catch(err => {
+                reject(err);
+            });
+    });
 }
 
 function handleCrimeResponse(res) {
+    let timer = timers.find(i => i.type === 'crime');
     if(res.captchaRequired) {
         console.error('#### RECAPTCHA REQUIRED!');
-        handleCaptchaV2();
+        timer.disable();
+        handleCaptchaV2(resumeCrimeIntervalWithRecaptchaToken);
         return;
     }
     else {
@@ -132,48 +210,47 @@ function handleCrimeResponse(res) {
         bullets = res.player.bullets;
     }
     if(res.result) {
-        handleCrimeResult(res.result);
+        printCrimeResult(res.result);
+        timer.enable();
+        timer.updateTimeStamp();
     }
     if(res.jam) {
-        if(Math.abs(res.jam['shoot-bullets']) <= bullets) {
+        if(bullets === undefined || Math.abs(res.jam['shoot-bullets']) <= bullets) {
             bullets -= Math.abs(res.jam['shoot-bullets']);
-            handleJam('shoot');
+            handleJam('shoot', timer);
         }
         else {
-            handleJam('surrender');
+            handleJam('surrender', timer);
         }
     }
 }
 
-function handleGTAResponse(res) {
+function handleGTAResponse(res, gtaId) {
+    let timer = timers.find(i => i.type === 'gta' && i.id === gtaId);
     if(res.captchaRequired) {
         console.error('#### RECAPTCHA REQUIRED!');
-        handleCaptchaV2();
+        timer.disable();
+        handleCaptchaV2(resumeGTAIntervalWithRecaptchaToken, gtaId);
         return;
-    }
-    else {
-        calculateCrimeInterval(res.energy);
     }
     if(res.player) {
         bullets = res.player.bullets;
         printLog(`Bullets: ${bullets}`);
     }
     if(res.result) {
-        handleCrimeResult(res.result);
+        printGTAResult(res.result, gtaId);
+        timer.enable();
+        timer.updateTimeStamp();
     }
     if(res.jam) {
         if(Math.abs(res.jam['shoot-bullets']) <= bullets) {
             bullets -= Math.abs(res.jam['shoot-bullets']);
-            handleJam('shoot');
+            handleJam('shoot', timer, true);
         }
         else {
-            handleJam('surrender');
+            handleJam('surrender', timer, true);
         }
     }
-}
-
-function handleCrimeResult(result) {
-    printResult(result);
 }
 
 let energyVal;
@@ -190,12 +267,11 @@ async function calculateCrimeInterval(energy) {
         if(!hasBeer || (findBeer && hasBeer.id !== findBeer.id)) {
             hasBeer = findBeer;
             let beerEnergy = hasBeer ? 20 : 0;
-            crimeInterval = Math.floor((20 / ((energy.rechargeAmount + beerEnergy) / 30)) * 1000);
-            if(timer) {
-                clearInterval(timer);
-            }
-            timer = startCrimeTimer(crimeInterval);
-            printLog(`Crime Interval Updated: ${crimeInterval}ms`);
+            let energyConsumption = 20;
+            energyConsumption += COMMIT_GTA ? 0.1 : 0;
+            let interval = Math.floor((20 / ((energy.rechargeAmount + beerEnergy) / 30)));
+            timers.find(i => i.type === 'crime').interval = interval;
+            printLog(`Crime Interval Updated: ${interval} seconds`);
         }
         if(hasBeer && maxEnergyVal - energyVal > 420) {
             consumeItem(findBeer.id);
@@ -240,16 +316,34 @@ function consumeItem(id) {
         });
 }
 
-function printResult(result) {
+function printCrimeResult(result) {
     let rewardString = result.outcome && result.outcome === 'success' ? ` - ${result.loot_contents.find(i => i.class === 'cash').display}` : '';
     let energyString = energyVal && maxEnergyVal ? ` - Energy: ${energyVal}/${maxEnergyVal}` : '';
     let bulletsString = ` - Bullets: ${bullets}`;
     let timeElapsed = (new Date().getTime() - timeStamp) / 1000;
     timeStamp = new Date().getTime();
-    printLog(result.float_message + rewardString + energyString + bulletsString + (LOG_TIME_ELAPSED ? ` [${parseFloat(timeElapsed.toFixed(2))} seconds elapsed since last crime.]` : ''));
+    printLog('CRIME: ' + result.float_message + rewardString + energyString + bulletsString + (LOG_TIME_ELAPSED ? ` [${parseFloat(timeElapsed.toFixed(2))} seconds elapsed since last crime.]` : ''));
 }
 
-function handleJam(option) {
+function printGTAResult(result, gtaId) {
+    if(result.outcome === 'success') {
+        if(!result.player_car.car) {
+            console.log('### Car Id Error:');
+            console.log(result);
+        }
+        else {
+            let carId = result.player_car.car.id;
+            if(carIdsForMelting.includes(carId)) {
+                carsForMelting.push(result.player_car.id);
+            }
+        }
+    }
+    let rewardString = result.outcome && result.outcome === 'success' ? ` - ${result.player_car.car.name}` : '';
+    printLog(`GTA #${gtaId}: ${result.float_message}${rewardString}`);
+
+}
+
+function handleJam(option, timer, isGTA = false) {
     printLog(`Handling Jam with ${option}...`);
 
     fetch("https://www.bootleggers.us/ajax/crimes.php?action=handle-jam", {
@@ -260,7 +354,14 @@ function handleJam(option) {
         .then(res => res.json())
         .then(res => {
             if(res.result) {
-                handleCrimeResult(res.result);
+                if(isGTA) {
+                    printGTAResult(res.result);
+                }
+                else {
+                    printCrimeResult(res.result);
+                }
+                timer.enable();
+                timer.updateTimeStamp();
                 if(res.result.outcome === 'busted') {
                     console.error(res.result.float_message);
                     let { arrest_length } = res.result;
@@ -273,8 +374,7 @@ function handleJam(option) {
         });
 }
 
-function handleCaptchaV2() {
-    clearInterval(timer);
+function handleCaptchaV2(callback, actionId) {
     let params = {
         method: 'userrecaptcha',
         googlekey: BL_RECAPTCHAV2_SITE_KEY,
@@ -289,7 +389,7 @@ function handleCaptchaV2() {
             printLog('Waiting 20 secs for Captcha resolve...');
             printLog('2Captcha Key: ' + res.request);
             setTimeout(() => {
-                resumeCrimeIntervalWithRecaptchaToken(res.request);
+                callback(res.request, actionId);
             }, 15000);
         })
         .catch(err => {
@@ -308,7 +408,8 @@ function resumeCrimeIntervalWithRecaptchaToken(id) {
         fetch('http://2captcha.com/res.php?' + new URLSearchParams(params))
             .then(res => res.json())
             .then(res => {
-                handleRecaptchaToken(res);
+                let timer = timers.find(i => i.type === 'crime');
+                handleRecaptchaToken(res, timer);
             })
             .catch(err => {
                 console.log(err);
@@ -318,13 +419,43 @@ function resumeCrimeIntervalWithRecaptchaToken(id) {
     );
 }
 
-function handleRecaptchaToken(res) {
+function meltCar(carId) {
+    fetch("https://www.bootleggers.us/ajax/bullet-factory.php?action=melt-car", {
+        "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
+        "body": `playerCarIds=${carId}&orderBy=&page=1&direction=asc&keep_amount=10`,
+        "method": "POST"
+    });
+}
+
+function resumeGTAIntervalWithRecaptchaToken(id, gtaId) {
+    params = {
+        id,
+        key: X2CAPTCHA_API_KEY,
+        action: 'get',
+        json: 1
+    }
+    captchaResolveTimer = setInterval(() => {
+        fetch('http://2captcha.com/res.php?' + new URLSearchParams(params))
+            .then(res => res.json())
+            .then(res => {
+                let timer = timers.find(t => t.type === 'gta' && t.id === gtaId);
+                handleRecaptchaToken(res, timer);
+            })
+            .catch(err => {
+                console.log(err);
+            });
+        },
+        5000
+    );
+}
+
+function handleRecaptchaToken(res, timer) {
     if(res.request !== CAPTCHA_NOT_READY) {
         clearInterval(captchaResolveTimer);
         printLog('Restarting Crime Interval...');
         token = res.request;
         printLog('Recaptcha Token: ' + token);
-        timer = startCrimeTimer(crimeInterval);
+        timer.enable();
     }
     else {
         printLog('Waiting an additional 5 seconds for Recaptcha to complete...');
