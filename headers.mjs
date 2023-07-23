@@ -1,4 +1,4 @@
-module.exports = (NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID) => {
+export default (NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID) => {
     return {
         "accept": "*/*",
         "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
