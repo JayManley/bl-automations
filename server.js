@@ -325,7 +325,7 @@ function printCrimeResult(result) {
 
 function printGTAResult(result, gtaId) {
     if(result.outcome === 'success') {
-        if(!result.player_car.car) {
+        if(!result.player_car) {
             console.log('### Car Id Error:');
             console.log(result);
         }
