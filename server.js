@@ -1,15 +1,20 @@
-import dotenv from 'dotenv';
-dotenv.config({path: './.env'});
+import config from './config.js';
 import headers from './headers.js';
 import fetch from 'node-fetch';
 
+const {
+    X2CAPTCHA_API_KEY,
+    NEWRELIC,
+    PHP_SESSION_ID,
+    X_NEWRELIC_ID,
+    LOG_TIME_ELAPSED,
+    COMMIT_CRIMES,
+    COMMIT_GTA
+} = config;
+
 // Constants
 const BL_RECAPTCHAV2_SITE_KEY = '6LeplqUlAAAAADD_vdYJRfzMtaBpZ9ZErfETYCI0';
-const { X2CAPTCHA_API_KEY, NEWRELIC, PHP_SESSION_ID, X_NEWRELIC_ID } = process.env;
 const CAPTCHA_NOT_READY = 'CAPCHA_NOT_READY';
-const LOG_TIME_ELAPSED = process.env.LOG_TIME_ELAPSED != 0;
-const COMMIT_CRIMES = process.env.COMMIT_CRIMES != 0;
-const COMMIT_GTA = process.env.COMMIT_GTA != 0;
 const PACK_OF_BEER_ID = 141;
 const LAUDANUM_ID = 138;
 const CRIME_ID = 8; // Change this to commit different crime indexes
@@ -33,11 +38,9 @@ const carIdsForMelting = [
 let carsForMelting = [];
 
 // Variables with default values assigned
-let crimeInterval = 42000;
 let timeStamp = new Date().getTime();
 
 // Variables
-let gtaTimers = [];
 let token;
 let captchaResolveTimer;
 let inventory;
@@ -52,7 +55,8 @@ const gtaIntervals = [
 let timers = [];
 
 class Timer {
-    constructor(type, id) {
+    constructor(type,
+        id) {
         this.type = type;
         this.id = id;
         this.enable();
@@ -88,7 +92,7 @@ init(); // Start the process
 function init() {
 
     if(COMMIT_CRIMES) {
-        timers.push(new Timer('crime', 8));
+        timers.push(new Timer('crime', CRIME_ID));
     }
 
     if(COMMIT_GTA) {
