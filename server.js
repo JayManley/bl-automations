@@ -1,6 +1,6 @@
-import dotenv from 'dotenv'
+import dotenv from 'dotenv';
 dotenv.config({path: './.env'});
-import headers from './headers.mjs';
+import headers from './headers.js';
 import fetch from 'node-fetch';
 
 // Constants
@@ -155,10 +155,6 @@ function commitCrime(id) {
         .catch(err => {
             console.log(err);
         });
-}
-
-function handleResponseError(timer) {
-
 }
 
 function commitGTA(gtaId) {
@@ -430,7 +426,7 @@ function meltCar(carId) {
 }
 
 function resumeGTAIntervalWithRecaptchaToken(id, gtaId) {
-    params = {
+    let params = {
         id,
         key: X2CAPTCHA_API_KEY,
         action: 'get',
