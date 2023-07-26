@@ -9,7 +9,8 @@ const {
     X_NEWRELIC_ID,
     LOG_TIME_ELAPSED,
     COMMIT_CRIMES,
-    COMMIT_GTA
+    COMMIT_GTA,
+    CRIME_ID
 } = config;
 
 // Constants
@@ -17,7 +18,6 @@ const BL_RECAPTCHAV2_SITE_KEY = '6LeplqUlAAAAADD_vdYJRfzMtaBpZ9ZErfETYCI0';
 const CAPTCHA_NOT_READY = 'CAPCHA_NOT_READY';
 const PACK_OF_BEER_ID = 141;
 const LAUDANUM_ID = 138;
-const CRIME_ID = 8; // Change this to commit different crime indexes
 const GTA_LOW_INCOME_NEIGHBOURHOOD_ID = 1;
 const GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID = 2;
 
