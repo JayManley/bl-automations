@@ -11,7 +11,8 @@ export default {
    X_NEWRELIC_ID: "",
    LOG_TIME_ELAPSED: false,
    COMMIT_CRIMES: true,
-   COMMIT_GTA: true
+   COMMIT_GTA: true,
+   CRIME_ID: 8
 }
 ```
 
