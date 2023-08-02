@@ -13,26 +13,24 @@ const {
     CRIME_ID
 } = config;
 
-// Constants
+// Global Constants
 const BL_RECAPTCHAV2_SITE_KEY = '6LeplqUlAAAAADD_vdYJRfzMtaBpZ9ZErfETYCI0';
 const CAPTCHA_NOT_READY = 'CAPCHA_NOT_READY';
+
+// Item Constants
 const PACK_OF_BEER_ID = 141;
 const LAUDANUM_ID = 138;
+const COFFEE_AND_BEIGNETS_ID = 9;
+const HOT_DOG_ID = 30;
+const COLA_ID = 142;
+
+// GTA Constants
 const GTA_LOW_INCOME_NEIGHBOURHOOD_ID = 1;
 const GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID = 2;
 
 const carIdsForMelting = [
-    7,
-    8,
-    9,
-    13,
-    14,
-    15,
-    17,
-    18,
-    24,
-    25,
-    26,
+    7,8,9,13,14,15,
+    17,18,24,25,26,
 ];
 
 let carsForMelting = [];
@@ -54,15 +52,23 @@ const gtaIntervals = [
 
 let timers = [];
 
+class Item {
+    constructor(id, energy, cooldown) {
+        this.id = id;
+        this.energy = energy;
+        this.cooldown = cooldown;
+    }
+}
+
 class Timer {
-    constructor(type,
-        id) {
+    constructor(type, id) {
         this.type = type;
         this.id = id;
+        this.resolvingCaptcha = false;
         this.enable();
         this.timeStamp = now() + timers.length;
         if('crime' === type) {
-            this.interval = 45;
+            this.interval = 20;
             this.callback = commitCrime;
         }
         else if('gta' === type) {
@@ -71,7 +77,12 @@ class Timer {
         }
     }
     updateTimeStamp() {
-        this.timeStamp = now() + this.interval;
+        if(this.type === 'crime') {
+            this.timeStamp = now() + Math.floor(this.interval / 2) + Math.floor(Math.random() * this.interval);
+        }
+        else {
+            this.timeStamp = now() + this.interval;
+        }
     }
     enable() {
         if(!this.enabled) {
@@ -107,18 +118,31 @@ function init() {
     }
 
     if(timers.length) {
-        setInterval(() => {
-            timers.forEach(async t => {
-                if(t.enabled && now() >= t.timeStamp) {
-                    await t.callback(t.id);
+        setInterval(async () => {
+            let timersResolvingCaptcha = timers.find(t => t.resolvingCaptcha);
+            if(!timersResolvingCaptcha) {
+                for(let i = 0; i < timers.length; i++) {
+                    let t = timers[i];
+                    if(t.enabled && now() >= t.timeStamp) {
+                        await t.callback(t.id);
+                        break;
+                    }
                 }
-            });
+            }
         }, 2000);
     }
 }
 
 function now() {
     return Math.floor(new Date().getTime() / 1000);
+}
+
+function delayAllTimers(delay) {
+    timers.forEach(t => {
+        if(t.timeStamp <= now()) {
+            t.timeStamp = now() + delay;
+        }
+    });
 }
 
 function commitCrime(id) {
@@ -140,12 +164,12 @@ function commitCrime(id) {
                     handleJam('shoot', timer);
                 }
                 else {
-                    handleJam('surrender', timer);
+                    handleJam('run', timer);
                 }
             }
             else {
                 if('You are in jail!' === res.error) {
-                    timers.forEach(t => t.timeStamp = t.timeStamp <= now() ? now() + 10 : t.timeStamp); // Wait 10 seconds if in jail before trying again
+                    delayAllTimers(10); // Wait 10 seconds if in jail before trying again
                 }
                 else if('Unable to commit crime!' === res.error) {
                     timer.timeStamp = now() + 10;
@@ -177,15 +201,15 @@ function commitGTA(gtaId) {
                 else {
                     let timer = timers.find(t => t.type === 'gta' && t.id === gtaId);
                     if('You are in jail!' === res.error) {
-                        timers.forEach(t => t.timeStamp = t.timeStamp <= now() ? now() + 10 : t.timeStamp); // Wait 10 seconds if in jail before trying again
+                        delayAllTimers(10); // Wait 10 seconds if in jail before trying again
                         printLog('GTA #' + gtaId + ': You are in jail, pausing all timers and resuming again in 10 seconds...');
                     }
                     else if(['Unable to commit crime!', 'This crime is cooling down!'].includes(res.error)) {
-                        timer.timeStamp = now() + 10;
-                        printLog('GTA #' + gtaId + ': Cooling down, trying again in 10 seconds...');
+                        timer.timeStamp = now() + 30 * gtaId;
+                        printLog(`GTA #${gtaId}: Cooling down, trying again in ${30 * gtaId} seconds...`);
                     }
                     else {
-                        printLog(`GTA ${timer.id} Error: ${res.error}`);
+                        printLog(`GTA #${gtaId} Error: ${res.error}`);
                     }
                     timer.enable();
                 }
@@ -200,8 +224,8 @@ function commitGTA(gtaId) {
 function handleCrimeResponse(res) {
     let timer = timers.find(i => i.type === 'crime');
     if(res.captchaRequired) {
-        console.error('#### RECAPTCHA REQUIRED!');
-        timer.disable();
+        console.error('#### RECAPTCHA REQUIRED! Pausing timers...');
+        timer.resolvingCaptcha = true;
         handleCaptchaV2(resumeCrimeIntervalWithRecaptchaToken);
         return;
     }
@@ -222,7 +246,7 @@ function handleCrimeResponse(res) {
             handleJam('shoot', timer);
         }
         else {
-            handleJam('surrender', timer);
+            handleJam('run', timer);
         }
     }
 }
@@ -231,7 +255,7 @@ function handleGTAResponse(res, gtaId) {
     let timer = timers.find(i => i.type === 'gta' && i.id === gtaId);
     if(res.captchaRequired) {
         console.error('#### RECAPTCHA REQUIRED!');
-        timer.disable();
+        timer.resolvingCaptcha = true;
         handleCaptchaV2(resumeGTAIntervalWithRecaptchaToken, gtaId);
         return;
     }
@@ -250,7 +274,7 @@ function handleGTAResponse(res, gtaId) {
             handleJam('shoot', timer, true);
         }
         else {
-            handleJam('surrender', timer, true);
+            handleJam('run', timer, true);
         }
     }
 }
@@ -454,13 +478,12 @@ function resumeGTAIntervalWithRecaptchaToken(id, gtaId) {
 function handleRecaptchaToken(res, timer) {
     if(res.request !== CAPTCHA_NOT_READY) {
         clearInterval(captchaResolveTimer);
-        printLog('Restarting Crime Interval...');
         token = res.request;
-        printLog('Recaptcha Token: ' + token);
-        timer.enable();
+        timer.resolvingCaptcha = false;
+        printLog('Captcha Resolved! Resuming timers...');
     }
     else {
-        printLog('Waiting an additional 5 seconds for Recaptcha to complete...');
+        printLog('Waiting an additional 5 seconds for captcha to complete...');
     }
 }
 
