@@ -371,8 +371,9 @@ function handleJam(timer, isGTA) {
     }
     return new Promise((resolve, reject) => {
         let choice = isGTA ? 'shoot' : 'run';
+        let page = isGTA ? 'auto-theft' : 'crimes';
         printLog(`Handling Jam with ${choice}...`);
-        fetch("https://www.bootleggers.us/ajax/crimes.php?action=handle-jam", {
+        fetch(`https://www.bootleggers.us/ajax/${page}.php?action=handle-jam`, {
             "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
             "body": `choice=${choice}`,
             "method": "POST"
