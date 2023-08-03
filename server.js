@@ -10,14 +10,19 @@ const {
     LOG_TIME_ELAPSED,
     COMMIT_CRIMES,
     COMMIT_GTA,
-    CRIME_ID
+    CRIME_ID,
+    CRIME_JAM_CHOICE,
+    GTA_JAM_CHOICE
 } = config;
+
+CRIME_JAM_CHOICE = null ? 'run' : CRIME_JAM_CHOICE;
+GTA_JAM_CHOICE = null ? 'shoot' : GTA_JAM_CHOICE;
 
 // Global Constants
 const BL_RECAPTCHAV2_SITE_KEY = '6LeplqUlAAAAADD_vdYJRfzMtaBpZ9ZErfETYCI0';
 const CAPTCHA_NOT_READY = 'CAPCHA_NOT_READY';
 
-// Item Constants
+// Item ID Constants
 const PACK_OF_BEER_ID = 141;
 const LAUDANUM_ID = 138;
 const COFFEE_AND_BEIGNETS_ID = 9;
