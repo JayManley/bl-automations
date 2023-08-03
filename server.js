@@ -14,8 +14,13 @@ const {
     GTA_JAM_CHOICE
 } = config;
 
-CRIME_JAM_CHOICE = null ? 'run' : CRIME_JAM_CHOICE;
-GTA_JAM_CHOICE = null ? 'shoot' : GTA_JAM_CHOICE;
+if(null == CRIME_JAM_CHOICE) {
+    CRIME_JAM_CHOICE = 'run';
+}
+
+if(null == GTA_JAM_CHOICE) {
+    GTA_JAM_CHOICE = 'shoot';
+}
 
 // Global Constants
 const BL_RECAPTCHAV2_SITE_KEY = '6LeplqUlAAAAADD_vdYJRfzMtaBpZ9ZErfETYCI0';
@@ -28,7 +33,7 @@ const COFFEE_AND_BEIGNETS_ID = 9;
 const HOT_DOG_ID = 30;
 const COLA_ID = 142;
 
-// GTA Constants
+// GTA ID Constants
 const GTA_LOW_INCOME_NEIGHBOURHOOD_ID = 1;
 const GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID = 2;
 
@@ -260,19 +265,17 @@ async function handleGTAResponse(res, gtaId) {
         handleCaptchaV2(resumeGTAIntervalWithRecaptchaToken, gtaId);
         return;
     }
+    if(res.player) {
+        bullets = res.player.bullets;
+        printLog(`Bullets: ${bullets}`);
+    }
+    if(res.result) {
+        printGTAResult(res.result, gtaId);
+        timer.enable();
+        timer.updateTimeStamp();
+    }
     if(res.jam) {
         await handleJam(timer, true);
-    }
-    else {
-        if(res.player) {
-            bullets = res.player.bullets;
-            printLog(`Bullets: ${bullets}`);
-        }
-        if(res.result) {
-            printGTAResult(res.result, gtaId);
-            timer.enable();
-            timer.updateTimeStamp();
-        }
     }
 }
 
