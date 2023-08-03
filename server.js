@@ -28,6 +28,10 @@ const COLA_ID = 142;
 const GTA_LOW_INCOME_NEIGHBOURHOOD_ID = 1;
 const GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID = 2;
 
+// Action Type Constants
+const ACTION_TYPE_CRIME = 0;
+const ACTION_TYPE_GTA = 1;
+
 const carIdsForMelting = [
     7,8,9,13,14,15,
     17,18,24,25,26,
@@ -43,7 +47,7 @@ let token;
 let captchaResolveTimer;
 let inventory;
 let bullets = 0;
-
+let handlingJam = false;
 
 const gtaIntervals = [
     5 * 60, // 5 Mins for Lower Class Neighbourhood
@@ -67,17 +71,17 @@ class Timer {
         this.resolvingCaptcha = false;
         this.enable();
         this.timeStamp = now() + timers.length;
-        if('crime' === type) {
+        if(ACTION_TYPE_CRIME === type) {
             this.interval = 20;
             this.callback = commitCrime;
         }
-        else if('gta' === type) {
+        else if(ACTION_TYPE_GTA === type) {
             this.interval = gtaIntervals[this.id - 1];
             this.callback = commitGTA;
         }
     }
     updateTimeStamp() {
-        if(this.type === 'crime') {
+        if(this.type === ACTION_TYPE_CRIME) {
             this.timeStamp = now() + Math.floor(this.interval / 2) + Math.floor(Math.random() * this.interval);
         }
         else {
@@ -103,13 +107,13 @@ init(); // Start the process
 function init() {
 
     if(COMMIT_CRIMES) {
-        timers.push(new Timer('crime', CRIME_ID));
+        timers.push(new Timer(ACTION_TYPE_CRIME, CRIME_ID));
     }
 
     if(COMMIT_GTA) {
         // Space out the intervals to prevent 'Unable to commit crime' error message
-        timers.push(new Timer('gta', GTA_LOW_INCOME_NEIGHBOURHOOD_ID));
-        timers.push(new Timer('gta', GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID));
+        timers.push(new Timer(ACTION_TYPE_GTA, GTA_LOW_INCOME_NEIGHBOURHOOD_ID));
+        timers.push(new Timer(ACTION_TYPE_GTA, GTA_MIDDLE_CLASS_NEIGHBOURHOOD_ID));
         setInterval(() => {
             if(carsForMelting.length) {
                 meltCar(carsForMelting.pop());
@@ -146,43 +150,42 @@ function delayAllTimers(delay) {
 }
 
 function commitCrime(id) {
-    token = token ? `&token=${token}` : '';
-    fetch("https://www.bootleggers.us/ajax/crimes.php?action=commit", {
-        "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
-        "body": `crime_id=${id}${token}`,
-        "method": "POST"
-    })
-        .then(res => res.json())
-        .then(res => {
-            token = ''; // We no longer need the token at this point
-            let timer = timers.find(t => t.type === 'crime');
-            if(!res.error) {
-                handleCrimeResponse(res);
-            }
-            else if(res.error === 'You need to deal with the cops first!') {
-                if(bullets >= 10) {
-                    handleJam('shoot', timer);
-                }
-                else {
-                    handleJam('run', timer);
-                }
-            }
-            else {
-                if('You are in jail!' === res.error) {
-                    delayAllTimers(10); // Wait 10 seconds if in jail before trying again
-                }
-                else if('Unable to commit crime!' === res.error) {
-                    timer.timeStamp = now() + 10;
-                }
-                else {
-                    printLog('Crime Error: ' + res.error);
-                }
-                timer.enable();
-            }
+    return new Promise((resolve, reject) => {
+        token = token ? `&token=${token}` : '';
+        fetch("https://www.bootleggers.us/ajax/crimes.php?action=commit", {
+            "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
+            "body": `crime_id=${id}${token}`,
+            "method": "POST"
         })
-        .catch(err => {
-            console.log(err);
-        });
+            .then(res => res.json())
+            .then(async res => {
+                token = ''; // We no longer need the token at this point
+                let timer = timers.find(t => t.type === ACTION_TYPE_CRIME);
+                if(!res.error) {
+                    handleCrimeResponse(res);
+                }
+                else {
+                    if('You are in jail!' === res.error) {
+                        delayAllTimers(10); // Wait 10 seconds if in jail before trying again
+                    }
+                    else if('Unable to commit crime!' === res.error) {
+                        timer.timeStamp = now() + 10;
+                    }
+                    else if('You do not have enough energy!' === res.error) {
+                        console.log('Energy low, pausing timer for 2 minutes to regenerate..');
+                        timer.timeStamp = now() + 120;
+                    }
+                    else {
+                        printLog('Crime Error: ' + res.error);
+                    }
+                    timer.enable();
+                }
+                resolve(res);
+            })
+            .catch(err => {
+                reject(err);
+            });
+    });
 }
 
 function commitGTA(gtaId) {
@@ -199,7 +202,7 @@ function commitGTA(gtaId) {
                     handleGTAResponse(res, gtaId);
                 }
                 else {
-                    let timer = timers.find(t => t.type === 'gta' && t.id === gtaId);
+                    let timer = timers.find(t => t.type === ACTION_TYPE_GTA && t.id === gtaId);
                     if('You are in jail!' === res.error) {
                         delayAllTimers(10); // Wait 10 seconds if in jail before trying again
                         printLog('GTA #' + gtaId + ': You are in jail, pausing all timers and resuming again in 10 seconds...');
@@ -221,8 +224,8 @@ function commitGTA(gtaId) {
     });
 }
 
-function handleCrimeResponse(res) {
-    let timer = timers.find(i => i.type === 'crime');
+async function handleCrimeResponse(res) {
+    let timer = timers.find(i => i.type === ACTION_TYPE_CRIME);
     if(res.captchaRequired) {
         console.error('#### RECAPTCHA REQUIRED! Pausing timers...');
         timer.resolvingCaptcha = true;
@@ -241,18 +244,12 @@ function handleCrimeResponse(res) {
         timer.updateTimeStamp();
     }
     if(res.jam) {
-        if(bullets === undefined || Math.abs(res.jam['shoot-bullets']) <= bullets) {
-            bullets -= Math.abs(res.jam['shoot-bullets']);
-            handleJam('shoot', timer);
-        }
-        else {
-            handleJam('run', timer);
-        }
+        await handleJam(timer, false);
     }
 }
 
-function handleGTAResponse(res, gtaId) {
-    let timer = timers.find(i => i.type === 'gta' && i.id === gtaId);
+async function handleGTAResponse(res, gtaId) {
+    let timer = timers.find(i => i.type === ACTION_TYPE_GTA && i.id === gtaId);
     if(res.captchaRequired) {
         console.error('#### RECAPTCHA REQUIRED!');
         timer.resolvingCaptcha = true;
@@ -269,13 +266,7 @@ function handleGTAResponse(res, gtaId) {
         timer.updateTimeStamp();
     }
     if(res.jam) {
-        if(Math.abs(res.jam['shoot-bullets']) <= bullets) {
-            bullets -= Math.abs(res.jam['shoot-bullets']);
-            handleJam('shoot', timer, true);
-        }
-        else {
-            handleJam('run', timer, true);
-        }
+        await handleJam(timer, true);
     }
 }
 
@@ -296,8 +287,8 @@ async function calculateCrimeInterval(energy) {
             let energyConsumption = 20;
             energyConsumption += COMMIT_GTA ? 0.1 : 0;
             let interval = Math.floor((20 / ((energy.rechargeAmount + beerEnergy) / 30)));
-            timers.find(i => i.type === 'crime').interval = interval;
-            printLog(`Crime Interval Updated: ${interval} seconds`);
+            timers.find(i => i.type === ACTION_TYPE_CRIME).interval = interval;
+            printLog(`Crime Interval Updated: ${interval} seconds with a random give or take of ${Math.floor(interval / 2)} seconds either way.`);
         }
         if(hasBeer && maxEnergyVal - energyVal > 420) {
             consumeItem(findBeer.id);
@@ -366,38 +357,48 @@ function printGTAResult(result, gtaId) {
     }
     let rewardString = result.outcome && result.outcome === 'success' ? ` - ${result.player_car.car.name}` : '';
     printLog(`GTA #${gtaId}: ${result.float_message}${rewardString}`);
-
 }
 
-function handleJam(option, timer, isGTA = false) {
-    printLog(`Handling Jam with ${option}...`);
-
-    fetch("https://www.bootleggers.us/ajax/crimes.php?action=handle-jam", {
-        "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
-        "body": `choice=${option}`,
-        "method": "POST"
-    })
-        .then(res => res.json())
-        .then(res => {
-            if(res.result) {
-                if(isGTA) {
-                    printGTAResult(res.result);
-                }
-                else {
-                    printCrimeResult(res.result);
-                }
-                timer.enable();
-                timer.updateTimeStamp();
-                if(res.result.outcome === 'busted') {
-                    console.error(res.result.float_message);
-                    let { arrest_length } = res.result;
-                    printLog(`Jail Timer: ${arrest_length} seconds`);
-                }
-            }
+function handleJam(timer, isGTA) {
+    if(handlingJam) {
+        console.log('Handling jam...');
+        return;
+    }
+    else {
+        handlingJam = true;
+    }
+    return new Promise((resolve, reject) => {
+    let choice = isGTA ? 'shoot' : 'run';
+        printLog(`Handling Jam with ${choice}...`);
+        fetch("https://www.bootleggers.us/ajax/crimes.php?action=handle-jam", {
+            "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
+            "body": `choice=${choice}`,
+            "method": "POST"
         })
-        .catch(err => {
-            console.log(err);
-        });
+            .then(res => res.json())
+            .then(res => {
+                if(res.result) {
+                    if(isGTA) {
+                        printGTAResult(res.result);
+                    }
+                    else {
+                        printCrimeResult(res.result);
+                    }
+                    timer.enable();
+                    timer.updateTimeStamp();
+                    if(res.result.outcome === 'busted') {
+                        console.error(res.result.float_message);
+                        let { arrest_length } = res.result;
+                        printLog(`Jail Timer: ${arrest_length} seconds`);
+                    }
+                }
+                handlingJam = false;
+                resolve(res);
+            })
+            .catch(err => {
+                reject(err);
+            });
+    });
 }
 
 function handleCaptchaV2(callback, actionId) {
@@ -434,7 +435,7 @@ function resumeCrimeIntervalWithRecaptchaToken(id) {
         fetch('http://2captcha.com/res.php?' + new URLSearchParams(params))
             .then(res => res.json())
             .then(res => {
-                let timer = timers.find(i => i.type === 'crime');
+                let timer = timers.find(i => i.type === ACTION_TYPE_CRIME);
                 handleRecaptchaToken(res, timer);
             })
             .catch(err => {
@@ -464,7 +465,7 @@ function resumeGTAIntervalWithRecaptchaToken(id, gtaId) {
         fetch('http://2captcha.com/res.php?' + new URLSearchParams(params))
             .then(res => res.json())
             .then(res => {
-                let timer = timers.find(t => t.type === 'gta' && t.id === gtaId);
+                let timer = timers.find(t => t.type === ACTION_TYPE_GTA && t.id === gtaId);
                 handleRecaptchaToken(res, timer);
             })
             .catch(err => {
@@ -488,7 +489,7 @@ function handleRecaptchaToken(res, timer) {
 }
 
 function getCharacterInventory() {
-    printLog('Fetching Character Inventory...');
+    printLog('Updating inventory...');
     return new Promise((resolve, reject) => {
         fetch("https://www.bootleggers.us/ajax/player.php?action=get-character-data", {
             "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
