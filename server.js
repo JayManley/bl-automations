@@ -290,7 +290,7 @@ async function calculateCrimeInterval(energy) {
             energyConsumption += COMMIT_GTA ? 0.1 : 0;
             let interval = Math.floor((20 / ((energy.rechargeAmount + beerEnergy) / 30)));
             timers.find(i => i.type === ACTION_TYPE_CRIME).interval = interval;
-            printLog(`Crime Interval Updated: ${interval} seconds with a random give or take ${Math.floor(interval / 2)} seconds either way.`);
+            printLog(`Crime Interval Updated: ${interval} seconds with a random give or take of ${Math.floor(interval / 2)} seconds either way.`);
         }
         if(hasBeer && maxEnergyVal - energyVal > 420) {
             consumeItem(findBeer.id);
