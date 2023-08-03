@@ -256,17 +256,19 @@ async function handleGTAResponse(res, gtaId) {
         handleCaptchaV2(resumeGTAIntervalWithRecaptchaToken, gtaId);
         return;
     }
-    if(res.player) {
-        bullets = res.player.bullets;
-        printLog(`Bullets: ${bullets}`);
-    }
-    if(res.result) {
-        printGTAResult(res.result, gtaId);
-        timer.enable();
-        timer.updateTimeStamp();
-    }
     if(res.jam) {
         await handleJam(timer, true);
+    }
+    else {
+        if(res.player) {
+            bullets = res.player.bullets;
+            printLog(`Bullets: ${bullets}`);
+        }
+        if(res.result) {
+            printGTAResult(res.result, gtaId);
+            timer.enable();
+            timer.updateTimeStamp();
+        }
     }
 }
 
@@ -288,7 +290,7 @@ async function calculateCrimeInterval(energy) {
             energyConsumption += COMMIT_GTA ? 0.1 : 0;
             let interval = Math.floor((20 / ((energy.rechargeAmount + beerEnergy) / 30)));
             timers.find(i => i.type === ACTION_TYPE_CRIME).interval = interval;
-            printLog(`Crime Interval Updated: ${interval} seconds with a random give or take of ${Math.floor(interval / 2)} seconds either way.`);
+            printLog(`Crime Interval Updated: ${interval} seconds with a random give or take ${Math.floor(interval / 2)} seconds either way.`);
         }
         if(hasBeer && maxEnergyVal - energyVal > 420) {
             consumeItem(findBeer.id);
@@ -368,7 +370,7 @@ function handleJam(timer, isGTA) {
         handlingJam = true;
     }
     return new Promise((resolve, reject) => {
-    let choice = isGTA ? 'shoot' : 'run';
+        let choice = isGTA ? 'shoot' : 'run';
         printLog(`Handling Jam with ${choice}...`);
         fetch("https://www.bootleggers.us/ajax/crimes.php?action=handle-jam", {
             "headers": headers(NEWRELIC, X_NEWRELIC_ID, PHP_SESSION_ID),
