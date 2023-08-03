@@ -7,7 +7,6 @@ const {
     NEWRELIC,
     PHP_SESSION_ID,
     X_NEWRELIC_ID,
-    LOG_TIME_ELAPSED,
     COMMIT_CRIMES,
     COMMIT_GTA,
     CRIME_ID,
@@ -344,9 +343,8 @@ function printCrimeResult(result) {
     let rewardString = result.outcome && result.outcome === 'success' ? ` - ${result.loot_contents.find(i => i.class === 'cash').display}` : '';
     let energyString = energyVal && maxEnergyVal ? ` - Energy: ${energyVal}/${maxEnergyVal}` : '';
     let bulletsString = ` - Bullets: ${bullets}`;
-    let timeElapsed = (new Date().getTime() - timeStamp) / 1000;
     timeStamp = new Date().getTime();
-    printLog('CRIME: ' + result.float_message + rewardString + energyString + bulletsString + (LOG_TIME_ELAPSED ? ` [${parseFloat(timeElapsed.toFixed(2))} seconds elapsed since last crime.]` : ''));
+    printLog('CRIME: ' + result.float_message + rewardString + energyString + bulletsString);
 }
 
 function printGTAResult(result, gtaId) {
@@ -375,7 +373,7 @@ function handleJam(timer, isGTA) {
         handlingJam = true;
     }
     return new Promise((resolve, reject) => {
-        let choice = isGTA ? 'shoot' : 'run';
+        let choice = isGTA ? GTA_JAM_CHOICE : CRIME_JAM_CHOICE;
         let page = isGTA ? 'auto-theft' : 'crimes';
         printLog(`Handling Jam with ${choice}...`);
         fetch(`https://www.bootleggers.us/ajax/${page}.php?action=handle-jam`, {
