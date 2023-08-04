@@ -10,6 +10,9 @@ const {
     COMMIT_CRIMES,
     COMMIT_GTA,
     CRIME_ID,
+} = config;
+
+let {
     CRIME_JAM_CHOICE,
     GTA_JAM_CHOICE
 } = config;
