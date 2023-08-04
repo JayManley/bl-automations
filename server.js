@@ -187,6 +187,9 @@ function commitCrime(id) {
                         console.log('Energy low, pausing timer for 2 minutes to regenerate..');
                         timer.timeStamp = now() + 120;
                     }
+                    else if('You need to deal with the cops first!') {
+                        handleJam(timer, null);
+                    }
                     else {
                         printLog('Crime Error: ' + res.error);
                     }
@@ -256,7 +259,7 @@ async function handleCrimeResponse(res) {
         timer.updateTimeStamp();
     }
     if(res.jam) {
-        await handleJam(timer, false);
+        await handleJam(timer, null);
     }
 }
 
@@ -278,7 +281,7 @@ async function handleGTAResponse(res, gtaId) {
         timer.updateTimeStamp();
     }
     if(res.jam) {
-        await handleJam(timer, true);
+        await handleJam(timer, gtaId);
     }
 }
 
@@ -370,7 +373,7 @@ function printGTAResult(result, gtaId) {
     printLog(`GTA #${gtaId}: ${result.float_message}${rewardString}`);
 }
 
-function handleJam(timer, isGTA) {
+function handleJam(timer, gtaId) {
     if(handlingJam) {
         console.log('Handling jam...');
         return;
@@ -379,6 +382,7 @@ function handleJam(timer, isGTA) {
         handlingJam = true;
     }
     return new Promise((resolve, reject) => {
+        let isGTA = gtaId !== null;
         let choice = isGTA ? GTA_JAM_CHOICE : CRIME_JAM_CHOICE;
         let page = isGTA ? 'auto-theft' : 'crimes';
         printLog(`Handling Jam with ${choice}...`);
@@ -391,7 +395,7 @@ function handleJam(timer, isGTA) {
             .then(res => {
                 if(res.result) {
                     if(isGTA) {
-                        printGTAResult(res.result);
+                        printGTAResult(res.result, gtaId);
                     }
                     else {
                         printCrimeResult(res.result);
